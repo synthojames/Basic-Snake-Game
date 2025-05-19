@@ -32,9 +32,11 @@ namespace Snake_Test
 
         //scoreboard
         int playerScore = 0;
+        int highScore = 0;
 
         //track gamestate
-        bool gameOver = false;
+        enum GameState {Start, Play, GameOver}
+        GameState currentGameState = GameState.Start;
 
 
         public Snake()
@@ -45,16 +47,15 @@ namespace Snake_Test
             //initialize timer
             gameTimer.Interval = 100;
             gameTimer.Tick += GameLoop;
-            gameTimer.Start();
 
             //detect input
             this.KeyPreview = true;
             this.KeyDown += Form1_KeyDown;
 
             //initialize objects
-            snake = new List<Rectangle>();
-            snake.Add(new Rectangle (5 * tileSize, 5* tileSize, tileSize, tileSize));
-            food = new Rectangle(50, 50, tileSize, tileSize);
+            ResetBody();
+            SpawnFood();
+            playerDirection = (Direction)rand.Next(0, 4);
 
             //lock the window
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -78,28 +79,16 @@ namespace Snake_Test
             switch(playerDirection)
             {
                 case Direction.Up:
-                    if(head.Y > 0)
-                    {
-                        head.Y -= tileSize;
-                    }
+                    head.Y -= tileSize;
                     break;
                 case Direction.Down:
-                    if(head.Y + head.Height < this.ClientSize.Height)
-                    {
-                        head.Y += tileSize;
-                    }
+                    head.Y += tileSize;
                     break;
                 case Direction.Left:
-                    if(head.X > 0)
-                    {
-                        head.X -= tileSize;
-                    }
+                    head.X -= tileSize;
                     break;
                 case Direction.Right:
-                    if(head.X + head.Width < this.ClientSize.Width)
-                    {
-                        head.X += tileSize;
-                    }
+                    head.X += tileSize;
                     break;
             }
            
@@ -110,51 +99,30 @@ namespace Snake_Test
             {
                 if (head.IntersectsWith(snake[i]))
                 {
-                    gameOver = true; ;
+                    currentGameState = GameState.GameOver;
                     break;
                 }
             }
-            if (gameOver == true)
+            if (head.X  < 0 || head.X + head.Width > this.ClientSize.Width)
             {
-                gameTimer.Stop();
-                MessageBox.Show("Game Over!");
-                resetGame();
+                currentGameState = GameState.GameOver;
+            }
+            if(head.Y < 0 || head.Y + head.Height > this.ClientSize.Height)
+            {
+                currentGameState = GameState.GameOver;
             }
 
             //Check for eating food
-
-
             if (snake[0].IntersectsWith(food))
             {
                 //increase score
                 playerScore++;
-
-
-
-                //generate new food
-                int maxX = this.ClientSize.Width / tileSize;
-                int maxY = this.ClientSize.Height / tileSize;
-
-                int foodX;
-                int foodY;
-                bool onSnake;
-                do
+                if(playerScore > highScore)
                 {
-                    foodX = rand.Next(0, maxX) * tileSize;
-                    foodY = rand.Next(0, maxY) * tileSize;
-
-                    onSnake = false;
-                    foreach (Rectangle segment in snake)
-                    {
-                        if (segment.X == foodX && segment.Y == foodY)
-                        {
-                            onSnake = true;
-                            break;
-                        }
-                    }
-                } while (onSnake);
-                food = new Rectangle(foodX, foodY, tileSize, tileSize);
-
+                    highScore = playerScore;
+                }
+                //generate new food
+                SpawnFood();
                 // increase tail
                 Rectangle lastSegment = snake[snake.Count - 1];
                 snake.Add(new Rectangle(lastSegment.X, lastSegment.Y, lastSegment.Width, lastSegment.Height));
@@ -170,6 +138,11 @@ namespace Snake_Test
         //Movement
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
+            if(currentGameState == GameState.Start || currentGameState == GameState.GameOver)
+            {
+                ResetGame();
+                return;
+            }
             if(e.KeyCode == Keys.W && playerDirection != Direction.Down)
             { playerDirection = Direction.Up; }
             if(e.KeyCode == Keys.S && playerDirection != Direction.Up)
@@ -182,6 +155,22 @@ namespace Snake_Test
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
+            if(currentGameState == GameState.Start)
+            {
+                string message = "Press any key to start";
+                var font = new Font("Arial", 24);
+                var size = e.Graphics.MeasureString(message, font);
+                e.Graphics.DrawString(message, font, Brushes.White, (ClientSize.Width - size.Width) / 2, (ClientSize.Height - size.Height) / 2);
+                return;
+            }
+            if(currentGameState == GameState.GameOver)
+            {
+                string message = $"Game OVER!\n Press space to restart\nHigh Score: {highScore}";
+                var font = new Font("Arial", 16);
+                var size = e.Graphics.MeasureString(message, font);
+                e.Graphics.DrawString(message, font, Brushes.White, (ClientSize.Width - size.Width) / 2, (ClientSize.Height - size.Height) / 2);
+                return;
+            }
             foreach(Rectangle segment in snake)
             {
                 e.Graphics.FillRectangle(Brushes.White, segment);
@@ -191,18 +180,50 @@ namespace Snake_Test
         }
 
         //reset game
-        private void resetBody()
+        private void ResetBody()
         {
             snake = new List<Rectangle>();
-            snake.Add(new Rectangle(5 * tileSize, 5 * tileSize, tileSize, tileSize));
-            food = new Rectangle(50, 50, tileSize, tileSize);
+
+            int maxX = this.ClientSize.Width / tileSize;
+            int maxY = this.ClientSize.Height / tileSize;
+
+            int startX = rand.Next(0, maxX) * tileSize;
+            int startY = rand.Next(0, maxY) * tileSize;
+            snake.Add(new Rectangle(startX, startY, tileSize, tileSize));
         }
-        private void resetGame()
+        private void SpawnFood()
+        {
+            int maxX = this.ClientSize.Width / tileSize;
+            int maxY = this.ClientSize.Height / tileSize;
+
+            int foodX;
+            int foodY;
+            bool onSnake;
+            do
+            {
+                foodX = rand.Next(0, maxX) * tileSize;
+                foodY = rand.Next(0, maxY) * tileSize;
+
+                onSnake = false;
+                foreach (Rectangle segment in snake)
+                {
+                    if (segment.X == foodX && segment.Y == foodY)
+                    {
+                        onSnake = true;
+                        break;
+                    }
+                }
+            } while (onSnake);
+            food = new Rectangle(foodX, foodY, tileSize, tileSize);
+        }
+        private void ResetGame()
         {
             playerScore = 0;
+            ResetBody();
+            SpawnFood();
             gameTimer.Start();
-            resetBody();
-            gameOver = false;
+            currentGameState = GameState.Play;
+            playerDirection = (Direction)rand.Next(0, 4);
 
         }
     }
